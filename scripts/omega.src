@@ -1,0 +1,645 @@
+if active_user != "root" then exit("Please execute as root or with sudo")
+
+metaxploit = include_lib("/lib/metaxploit.so")
+cryptotools = include_lib("/lib/crypto.so")
+
+process_requirement = function (line)
+	data = ""
+	if line == "* Using namespace net.so compiled at version >= 1.0.0" then 
+		data = data + "N"
+	else if line == "* Using namespace kernel_module.so compiled at version >= 1.0.0" then 
+		data = data + "K"
+	else if line == "* Using namespace init.so compiled at version >= 1.0.0" then 
+		data = data + "I"
+	else if line == "* Checking path /usr exists in the file system." then 
+		data = data + "U"
+	else if line == "* Checking path /bin exists in the file system." then 
+		data = data + "B"
+	else if line == "* Checking registered users equal to 3." then 
+		data = data + "x"
+	else if line == "* Checking registered users equal to 2." then 
+		data = data + "y"
+	else if line == "* Checking registered users equal to 1." then 
+		data = data + "z"
+	else if line == "* Checking guest active user." then 
+		data = data + "g"
+	else if line == "* Checking root active user." then 
+		data = data + "r"
+	else if line == "* Checking an active user." then 
+		data = data + "u"
+	else if line == "* 3 port forwarding configured from router to the target computer." then 
+		data = data + "3"
+	else if line == "* 2 port forwarding configured from router to the target computer." then 
+		data = data + "2"
+	else if line == "* 1 port forwarding configured from router to the target computer." then 
+		data = data + "1"
+	else
+		//print("UNALLOCATED REQUIREMENT!!!\n" + line)
+	end if
+	return data
+end function
+
+scan_network = function(ip, ports, ignoring=[])
+	vulns = ""
+	for port in ports
+		vulns = vulns + scan_port(ip, port)
+	end for
+	return vulns
+end function
+
+scan_port = function(ip, port, ignoring=[])
+	vulns = ""
+	net_session = metaxploit.net_use(ip, port)
+	if net_session == null then return false
+	lib = net_session.dump_lib
+	vulns = vulns + get_lib_vulns(lib)
+	return vulns
+end function
+
+
+
+
+
+stab = function(ip, port, memory_address, overflow_index, package="")
+	net_session = metaxploit.net_use(ip, port)
+	metalib = net_session.dump_lib()
+	vulns = metaxploit.scan_address(metalib, memory_address)
+	
+	overflows = []
+	for line in vulns.split("\n")
+		if line == "" then continue
+		if line[0] == "U" then
+			word = ""
+			active = false
+			for char in line
+				if active then
+					if char == "<" then 
+						active = false
+						break
+					else 
+						word = word + char
+					end if 
+				end if
+				if char == ">" then active = true
+			end for
+			overflows.push(word)
+		end if
+			
+	end for
+	
+	if overflow_index >= overflows.len or overflow_index < 0 then
+		print("Invalid index")
+		return
+	end if	
+	
+	overflow_value = overflows[overflow_index]
+	
+	result = metalib.overflow(memory_address, overflow_value, package)
+	return result
+end function
+
+get_vulns = function(ip, location_path)
+	pre_done_vulns = getsaved_vulns(location_path)
+	open_ports = nmap(ip)
+	new_vulns = scan_network(ip, open_ports, pre_done_vulns)
+	vulns = save_file.get_content + new_vulns
+	save_file.set_content(vulns)
+end function
+
+getsaved_vulns = function(location_path)
+	get_shell.host_computer.touch(location_path)
+	save_file = get_shell.host_computer.File(location_path)
+	getsaved_vulns = save_file.get_content.split(";")
+	return getsaved_vulns
+end function
+
+
+
+
+
+get_lib_vulns = function(lib, ignoring=[])
+	output = lib.lib_name + ":" + lib.version + ":"
+	for ignore in ignoring
+		splits = ignore.split(":")
+		savename = splits[0]
+		saveversion = splits[1]
+		if lib.lib_name == savename and lib.version == saveversion then return ignore
+	end for
+	addresses = metaxploit.scan(lib)
+	for addr_i in range(addresses.len-1, 0)
+		address = addresses[addr_i]
+		output = output + address
+		data = metaxploit.scan_address(lib, address)
+		//print(">>>> " + address)
+		//print(data)
+		for line in data.split("\n")
+			if line == "" then continue
+			if line[0] == "*" then output = output + process_requirement(line)
+			if line[0] == "U" then output = output + ">"
+		end for
+			
+		if addr_i != 0 then output = output + "|"
+	end for
+	return output +";"
+end function
+
+nmap = function(ip_addr)
+	ports = get_ports(ip_addr)
+	
+	router = router(ip_addr)
+	
+	for i in range(0, ports.len-1)
+		port = ports[i]
+		ports[i] = ports[i].port_number + " " + router.port_info(ports[i]) + " "
+		if port.is_closed() then 
+			ports[i] = ports[i] + "CLOSED"
+		else
+			ports[i] = ports[i] + "OPEN"
+		end if
+		
+	end for
+	
+	return ports
+end function
+
+router = function(ip_addr)
+	if not is_valid_ip(ip_addr) then return null
+	router = null
+	isLanIp = is_lan_ip(ip_addr)
+	if isLanIp or ip_addr == "127.0.0.1" then
+		router = get_router
+	else
+		router = get_router(ip_addr)
+	end if
+	return router
+end function
+
+
+get_ports = function (ip_addr)
+	if not is_valid_ip(ip_addr) then return null
+	router = null
+	isLanIp = is_lan_ip(ip_addr)
+	if isLanIp or ip_addr == "127.0.0.1" then
+		router = get_router
+	else
+		router = get_router(ip_addr)
+	end if
+
+	ports = null
+
+	if not isLanIp then
+ 	  	ports = router.used_ports
+	else
+   		ports = router.device_ports(ip_addr)
+	end if
+
+	if typeof(ports) == "string" then ports = []
+	
+	return ports
+end function
+
+
+IP_RANGE = range(0,255)
+SAVE_FILE_NAME = "stabs.dat"
+SAVE_FILE = get_shell.host_computer.File(SAVE_FILE_NAME)
+if SAVE_FILE == null then 
+	get_shell.host_computer.touch(current_path, SAVE_FILE_NAME)
+	SAVE_FILE = get_shell.host_computer.File(SAVE_FILE_NAME)
+end if
+
+
+get_attacks_on_addr = function (addr) 
+	ports = get_ports(addr)
+	//print(ports)
+	
+	attacks = []
+	
+	port_numbers = [0]
+	for port in ports
+		if not port.is_closed then port_numbers.push(port.port_number)
+	end for
+	for port_number in port_numbers
+		//print(port_number)
+		net_session = metaxploit.net_use(addr, port_number)
+		if typeof(net_session) != "NetSession" then continue
+		library = net_session.dump_lib
+		lib_name = library.lib_name
+		//print(lib_name)
+		lib_version = library.version
+		vulns_content = SAVE_FILE.get_content
+		vulns_list = vulns_content.split(";")
+		vuln_index = -1
+		for i in range(0, vulns_list.len-1)
+			if vulns_list[i] == "" then continue
+			vuln = vulns_list[i]
+			vuln_lib = vuln.split(":")[0]
+			vuln_ver = vuln.split(":")[1]
+			if vuln_lib != lib_name then continue
+			if vuln_ver != lib_version then continue
+			vuln_index = i
+			break
+		end for
+		target_vuln = ""
+		if vuln_index == -1 then
+			lib_vuln = get_lib_vulns(library)
+			SAVE_FILE.set_content(vulns_content + lib_vuln)
+			target_vuln = lib_vuln
+		else
+			target_vuln = vulns_list[vuln_index]
+		end if
+		attacks.push([port_number, target_vuln])
+	end for
+	
+	attacks_string = "PORT ATTACKS"
+	for attack in attacks
+		attacks_string = attacks_string + "\n" + attack[0] + " " + attack[1]
+	end for
+	
+	print(format_columns(attacks_string))
+	
+end function
+
+
+
+
+
+
+through_all_ips = function (func)
+	for o1 in IP_RANGE
+		for o2 in IP_RANGE
+			for o3 in IP_RANGE
+				for o4 in IP_RANGE
+					func(o1+"."+o2+"."+o3+"."+o4)
+				end for
+			end for
+		end for
+	end for
+end function
+
+get_wifi_networks = function(net_device)
+	return get_shell.host_computer.wifi_networks(net_device)
+end function
+
+tokenize_command = function(command)
+	current_token = ""
+	in_string = null
+	tokens = []
+	for char in command
+		if in_string == char then
+			in_string = null
+		else if (char == """" or char == "'") and in_string == null then
+			in_string = char
+		end if
+		if in_string != null or char != " " then
+			current_token = current_token + char
+		else if char == " " then
+			tokens.push(current_token)
+			current_token = ""
+		end if
+	end for
+	tokens.push(current_token)
+	real_tokens = []
+	for token in tokens 
+		if token != "" then real_tokens.push(token)
+	end for
+	
+	return real_tokens
+end function
+
+get_file_children = function(file)
+	if not file.is_folder then return []
+	return file.get_files + file.get_folders
+end function
+
+get_command_tac_value = function(command, tac)
+	if command.len <= 2 then return ""
+	for i in range(0,command.len-2)
+		if command[i] == tac then return command[i+1]
+	end for
+	return ""
+end function
+
+
+change_file = function(current_file, add_path)
+	splits = add_path.split("/")
+	output = current_file
+	for split in splits
+		if split == "" then continue
+		updated = false
+		if split == ".." then
+			output = output.parent
+			updated = true
+		else
+			file_children = output.get_files + output.get_folders
+			for child in file_children
+				if child.name == split then 
+					output = child
+					updated = true
+				end if
+			end for
+		end if
+		//print(split + " | " + output.path + " " + updated)
+		if not updated then return current_file
+	end for
+	return output
+end function
+
+ls = function(dir, verbose)
+	files = get_file_children(dir)
+	files = sort_file_list(files)
+	output = ""
+	for file in files
+		if file.is_folder then
+			output = output + "<color=lightblue>" + file.name + "</color>"
+		else if file.is_binary then
+			output = output + "<color=green>" + file.name + "</color>"
+		else 
+			output = output + file.name
+		end if
+		if verbose then output = output + " " + file.group + " " + file.permissions + " " + file.size + "B <color=lightblue>" + file.parent.name + "</color>"
+		output = output + "\n"
+	end for
+	print(format_columns(output))
+end function
+
+get_lan_ips = function()
+
+end function
+
+cat = function(file)
+	if file.is_folder then 
+		ls(file, false)
+	else if file.is_binary then
+		print("Cannot display file contents (is binary)")
+	else
+		print(file.get_content)
+	end if
+end function
+		
+
+sort_file_list = function(list)
+	folders = []
+	files = []
+	for file in list
+		if file.is_folder then 
+			folders.push(file)
+		else
+			files.push(file)
+		end if
+	end for
+	if folders.len > 2 then
+		for folder in folders
+			swap = false
+			for i in range(0,folders.len-2)
+				if folders[i].name > folders[i+1].name then
+					temp = folders[i+1]
+					folders[i+1] = folders[i]
+					folders[i] = temp
+					swap = true
+				end if
+			end for
+			if not swap then break
+		end for
+	end if
+	if files.len > 2 then
+		for file in files
+			swap = false
+			for i in range(0,files.len-2)
+				if files[i].name > files[i+1].name then
+					temp = files[i+1]
+					files[i+1] = files[i]
+					files[i] = temp
+					swap = true
+				end if
+			end for
+			if not swap then break
+		end for
+	end if
+	return folders + files
+end function
+
+get_command_tac = function(command, tac)
+	for i in command
+		if i == tac then return true
+	end for
+	return false
+end function
+
+main = function()
+	target = "127.0.0.1"
+	target_port = null
+	path_history = []
+	top_access_history = [get_shell]
+	command_directory = get_shell.host_computer.File(current_path)
+	result = "no results"
+	run = true
+	while run
+		command = user_input(command_directory.path+"> ", false, false, true)
+		command = tokenize_command(command)
+		if command.len == 0 then continue
+		opcode = command[0]
+		if opcode == "exit" then 
+			run = false
+			wait(0.4)
+			print("Thanks for playing!")
+			wait(0.3)
+			print("Come again soon!")
+			wait(0.7)
+		else if opcode == "stab" then
+			ip = get_command_tac_value(command, "-a")
+			if ip == "" then ip = target
+			port = get_command_tac_value(command, "-p").to_int
+			if typeof(port) == "string" then port = target_port
+			addr = get_command_tac_value(command, "-m")
+			ov = get_command_tac_value(command, "-o").to_int
+			if typeof(ov) == "string" then
+				print("Invalid overflow index")
+				continue
+			end if
+			package = get_command_tac_value(command, "--payload")
+			result = stab(ip, port, addr, ov, package)
+			if typeof(result) == "shell" then 
+				path_history.push(command_directory)
+				top_access_history.push(result)
+				command_directory = result.host_computer.File("/")
+			else if typeof(result) == "computer" then
+				path_history.push(command_directory)
+				top_access_history.push(result)
+				command_directory = result.File("/")
+			else if typeof(result) == "file" then
+				path_history.push(command_directory)
+				top_access_history.push(result)
+				command_directory = result
+			else
+				print(typeof(result))
+			end if
+		
+		else if opcode == "scan-addr" then
+			ip = get_command_tac_value(command, "-a")
+			if ip == "" then ip = target
+			get_attacks_on_addr(ip)
+		
+		else if opcode == "collect" then
+			ip = get_command_tac_value(command, "-a")
+			if ip == "" then ip = target
+			port = get_command_tac_value(command, "-p").to_int
+			if typeof(port) == "string" then port = target_port
+			results = scan_port(ip, port)
+			print(results)
+				
+		else if opcode == "nmap" then
+			ip = get_command_tac_value(command, "-a")
+			if ip == "" then ip = target
+			info = ""
+			for port in nmap(ip)
+				info = info + port + "\n"
+			end for
+			print(format_columns(info))
+		else if opcode == "omega" then
+			get_shell.launch("/bin/omega")
+		else if opcode == "target" then
+			ip = get_command_tac_value(command, "-a")
+			if ip != "" then target = ip
+			port = get_command_tac_value(command, "-p")
+			if port != "" then
+				port = port.to_int
+				if typeof(port) != "string" then target_port = port
+			end if
+			print("Target is: " + target + ":" + target_port)
+		else if opcode == "whoami" then
+			info = active_user
+			if get_shell.host_computer.is_network_active then info = info + " " + get_shell.host_computer.public_ip
+			print(info)
+		else if opcode == "reboot" then
+			if user_input("confirm (Y): ") == "Y" then get_shell.host_computer.reboot
+		else if opcode == "internet" then
+			if get_shell.host_computer.is_network_active then
+				print("Network already active")
+			else
+				devices = get_shell.host_computer.network_devices.split("\n")
+				
+				for device in devices
+					if not device then continue
+					cryptotools.airmon("start", device.split(" ")[0])
+					info = ""
+					networks = get_shell.host_computer.wifi_networks(device.split(" ")[0])
+					for i in range(0,networks.len-1)
+						info = info + i + ") " + networks[i] + "\n"
+					end for
+					
+					print(format_columns(info))
+					
+					selection = user_input("Select a connection (0-" + (networks.len-1) + ") >").to_int
+					if typeof(selection) != "string" then
+						if selection < 0 or selection >= networks.len then
+							print("Invalid Selection")
+						else
+							selected_network = networks[selection].split(" ")
+							//print(selected_network[0] + " " + selected_network[2])
+							print("Collecting 10,000 ACKs before continuing")
+							error = cryptotools.aireplay(selected_network[0], selected_network[2], 10000)
+							if error == null then
+								print("Successful")
+								password = cryptotools.aircrack("/home/" + active_user + "/file.cap")
+								print("Password found: " + password)
+								if not get_shell.host_computer.connect_wifi(device.split(" ")[0], selected_network[0], selected_network[2], password) then
+									print("Connection failed...")
+								end if
+							else
+								print(error)
+							end if
+						end if
+					else
+						print("Invalid selection")
+					end if
+					
+				end for
+			end if
+			
+		else if opcode == "clear" or opcode == "cls" then
+			wait(0.1)
+			clear_screen()
+		else if opcode == "ls" then
+			verbose = get_command_tac(command, "-l") or get_command_tac(command, "-a")
+			ls(command_directory, verbose)
+		
+		else if opcode == "cat" then
+			print(command)
+			if command.len == 1 then
+				cat(command_directory)
+			else
+				if command[1][0] == "/" then
+					new_dir = get_shell.host_computer.File(command[1])
+				else
+					new_dir = get_shell.host_computer.File(command_directory.path + "/" + command[1])
+				end if
+				if new_dir != null then
+					cat(new_dir)
+				else 
+					print(command[1] + " not found")
+				end if
+			end if
+		else if opcode == "path" then
+			print(command_directory.path)
+		else if opcode == "decipher" then
+			if command.len == 1 and not (command_directory.is_folder or command_directory.is_binary) then
+				password = cryptotools.decipher(command_directory.get_content)
+				print(password)
+			else
+				for value in command[1:]
+					password = cryptotools.decipher(value)
+					print(password)
+				end for
+			end if
+		else if opcode == "cd" then
+			if command.len == 1 then
+				command_directory = get_shell.host_computer.File(home_dir)
+			else
+				if command[1][0] == "/" then
+					new_dir = get_shell.host_computer.File(command[1])
+				else
+					new_dir = change_file(command_directory, command[1])
+				end if
+				if new_dir != null then
+					top_access_history.push(top_access_history[top_access_history.len-1])
+					path_history.push(command_directory)
+					command_directory = new_dir
+				else 
+					print(command[1] + " not found")
+				end if
+				
+			end if
+		else if opcode == "access_level" then
+			print(typeof(top_access_history[top_access_history.len-1]))
+		else if opcode == "get-terminal" then
+			shell = top_access_history[top_access_history.len-1]
+			if typeof(shell) == "shell" then
+				shell.start_terminal
+			else
+				print("Do not have the required access level")
+			end if
+			
+		else if opcode == "back" then
+			if path_history.len > 0 then
+				command_directory = path_history.pop()
+				top_access_history.pop()
+			else
+				print("Nowhere to return to")
+			end if
+		else 
+			print("Command not found")
+		end if
+		
+	end while
+end function
+
+
+main()
+
+
+
+
+
+
+
+
