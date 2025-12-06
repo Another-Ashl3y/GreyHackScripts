@@ -547,6 +547,17 @@ main = function()
 			print(format_columns(info))
 		else if opcode == "omega" then
 			get_shell.launch("/bin/omega")
+			
+		else if opcode == "download" then
+			command_directory.copy("/home/" + active_user + "/Downloads", command_directory.name + "_" + current_date)
+		else if opcode == "file_guest" then
+			command_directory.set_owner("guest")
+		else if opcode == "move_to_downloads" then
+			command_directory.move("/home/" + active_user + "/Downloads", command_directory.name + "_" + current_date)
+		else if opcode == "owner" then
+			print(command_directory.owner)
+		else if opcode == "perms" then
+			print(command_directory.permissions)
 		else if opcode == "target" then
 			ip = get_command_tac_value(command, "-a")
 			if ip != "" then target = ip
