@@ -426,6 +426,8 @@ get_command_tac = function(command, tac)
 end function
 
 main = function()
+	commands = ["exit","stab","scan-addr","collect","omega","target","cd","ls","cat","internet","reboot","nmap","whoami","clear","cls","access_level","get-terminal","back"]
+
 	target = "127.0.0.1"
 	target_port = null
 	path_history = []
@@ -628,6 +630,11 @@ main = function()
 			end if
 		else 
 			print("Command not found")
+			print("Available commands:")
+			for command in commands
+				print(command)
+			end for
+			
 		end if
 		
 	end while
