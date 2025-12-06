@@ -1,3 +1,17 @@
-Ellipse was conceived to mainly be used in the corporate sphere, and its strengths were security and portability since it was possible to install the system in different architectures with few changes to the code. To achieve this, the whole system was rewritten in a programming language called Greyscript along with its own closed source compiler. Its peculiar implementation made it really difficult to infect or exploit, in part because nobody managed to create a reliable decompiler for Greyscript. 
+Ellipse was conceived to mainly be used in the corporate 
+sphere, and its strengths were security and portability since 
+it was possible to install the system in different 
+architectures with few changes to the code. To achieve this, 
+the whole system was rewritten in a programming language called 
+Greyscript along with its own closed source compiler. Its 
+peculiar implementation made it really difficult to infect or 
+exploit, in part because nobody managed to create a reliable 
+decompiler for Greyscript. 
 
-In a cryptic message released on the web in 1996, the company announced that Ellipse where to be made available for both personal and commercial use completely free without any licensing. The secrecy surrounding Neurobox along with several cryptic messages published by the company, has spawned numerous theories about the company’s origin and agenda while also boosting the popularity of the operating system.
+In a cryptic message released on the web in 1996, the company 
+announced that Ellipse where to be made available for both 
+personal and commercial use completely free without any 
+licensing. The secrecy surrounding Neurobox along with several 
+cryptic messages published by the company, has spawned numerous 
+theories about the company’s origin and agenda while also 
+boosting the popularity of the operating system.
