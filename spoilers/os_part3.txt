@@ -1,0 +1,7 @@
+In 1998 the first major vulnerability in Ellipse was discovered, this vulnerability had been exploited for months until it was discovered, which led to harsh criticism of the company. Their response was the last public message by the company to date: 
+
+“Everything under control”
+
+Less than 24 hours later a patch was released that fixed the vulnerability. Since then, new vulnerabilities keep appearing, several of which have been connected to corporate espionage and bank heists among other things. To this day the company is stuck in a perpetual cycle of finding and patching these never-ending flaws.
+
+One popular theory is that Neurobox themselves are behind the security flaws, but what they would have to gain from doing this and why they continue to patch their system if that were the case, remains unclear. Meanwhile, the many years of silence from Neurobox since the hacking surge began, continue to inspire new conspiracy theories about the company.
