@@ -3,6 +3,17 @@ if active_user != "root" then exit("Please execute as root or with sudo")
 metaxploit = include_lib("/lib/metaxploit.so")
 cryptotools = include_lib("/lib/crypto.so")
 
+ROUTER_HISTORY = [get_router()]
+
+if metaxploit != null then
+	met_lib = metaxploit.load("/lib/metaxploit.so")
+	print("Metaxploit version: " + met_lib.version)
+	if cryptotools != null then
+		crypt_lib = metaxploit.load("/lib/crypto.so")
+		print("Crypto version: " + crypt_lib.version)
+	end if 
+end if
+
 process_requirement = function (line)
 	data = ""
 	if line == "* Using namespace net.so compiled at version >= 1.0.0" then 
@@ -143,10 +154,24 @@ get_lib_vulns = function(lib, ignoring=[])
 	return output +";"
 end function
 
-nmap = function(ip_addr)
-	ports = get_ports(ip_addr)
+nmap = function(ip_addr,router=null)
+	if router == null then
+		router = router_at(ip_addr)
+	end if
 	
-	router = router(ip_addr)
+	
+	ports = get_ports(ip_addr, router)
+	
+	if ports == null then
+		print("Invalid search")
+		return
+	end if
+
+	if ports.len == 0 then
+		print("No open ports")
+		return 
+	end if
+	
 	
 	for i in range(0, ports.len-1)
 		port = ports[i]
@@ -162,28 +187,40 @@ nmap = function(ip_addr)
 	return ports
 end function
 
-router = function(ip_addr)
+router_at = function(ip_addr)
 	if not is_valid_ip(ip_addr) then return null
 	router = null
 	isLanIp = is_lan_ip(ip_addr)
-	if isLanIp or ip_addr == "127.0.0.1" then
+	if isLanIp then
 		router = get_router
 	else
 		router = get_router(ip_addr)
 	end if
+	collected = false
+	for r in ROUTER_HISTORY
+		if router == r then 
+			collected = true
+			break
+		end if
+	end for
+	if not collected then ROUTER_HISTORY.push(router)
 	return router
 end function
 
 
-get_ports = function (ip_addr)
+get_ports = function (ip_addr, router=null)
 	if not is_valid_ip(ip_addr) then return null
-	router = null
 	isLanIp = is_lan_ip(ip_addr)
-	if isLanIp or ip_addr == "127.0.0.1" then
-		router = get_router
-	else
-		router = get_router(ip_addr)
+	if router == null then
+
+		if isLanIp or ip_addr == "127.0.0.1" then
+			router = get_router
+		else
+			router = get_router(ip_addr)
+		end if
 	end if
+
+	
 
 	ports = null
 
@@ -208,8 +245,8 @@ if SAVE_FILE == null then
 end if
 
 
-get_attacks_on_addr = function (addr) 
-	ports = get_ports(addr)
+get_attacks_on_addr = function (addr, router=null)
+	ports = get_ports(addr,router)
 	//print(ports)
 	
 	attacks = []
@@ -425,6 +462,8 @@ get_command_tac = function(command, tac)
 	return false
 end function
 
+
+
 main = function()
 	commands = ["exit","stab","scan-addr","collect","omega","target","cd","ls","cat","internet","reboot","nmap","whoami","clear","cls","access_level","get-terminal","back"]
 
@@ -479,8 +518,17 @@ main = function()
 		else if opcode == "scan-addr" then
 			ip = get_command_tac_value(command, "-a")
 			if ip == "" then ip = target
-			get_attacks_on_addr(ip)
+			router_index = get_command_tac_value(command, "-r").to_int
+			if typeof(router_index) == "string" then router_index = 0
+			if router_index < 0 or router_index > ROUTER_HISTORY.len-1 then router_index = 0
+			get_attacks_on_addr(ip, ROUTER_HISTORY[router_index])
 		
+		else if opcode == "routers" then 
+			info = "INDEX IP"
+			for i in range(0, ROUTER_HISTORY.len-1)
+				info = info + "\n" + i + " " + ROUTER_HISTORY[i].public_ip
+			end for
+			print(format_columns(info))		
 		else if opcode == "collect" then
 			ip = get_command_tac_value(command, "-a")
 			if ip == "" then ip = target
