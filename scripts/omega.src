@@ -219,9 +219,6 @@ get_ports = function (ip_addr, router=null)
 			router = get_router(ip_addr)
 		end if
 	end if
-
-	
-
 	ports = null
 
 	if not isLanIp then
@@ -246,7 +243,8 @@ end if
 
 
 get_attacks_on_addr = function (addr, router=null)
-	ports = get_ports(addr,router)
+	ports = get_ports(addr)
+
 	//print(ports)
 	
 	attacks = []
@@ -256,7 +254,7 @@ get_attacks_on_addr = function (addr, router=null)
 		if not port.is_closed then port_numbers.push(port.port_number)
 	end for
 	for port_number in port_numbers
-		//print(port_number)
+
 		net_session = metaxploit.net_use(addr, port_number)
 		if typeof(net_session) != "NetSession" then continue
 		library = net_session.dump_lib
@@ -472,6 +470,8 @@ main = function()
 	path_history = []
 	top_access_history = [get_shell]
 	command_directory = get_shell.host_computer.File(current_path)
+	
+	
 	result = "no results"
 	run = true
 	while run
@@ -548,12 +548,12 @@ main = function()
 		else if opcode == "omega" then
 			get_shell.launch("/bin/omega")
 			
-		else if opcode == "download" then
-			command_directory.copy("/home/" + active_user + "/Downloads", command_directory.name + "_" + current_date)
+		//else if opcode == "download" then
+		//	response = command_directory.copy(current_path + "/Downloads", command_directory.name + "_" + command_directory.owner)
+		//	if typeof(response) == "string" then print(response)
 		else if opcode == "file_guest" then
-			command_directory.set_owner("guest")
-		else if opcode == "move_to_downloads" then
-			command_directory.move("/home/" + active_user + "/Downloads", command_directory.name + "_" + current_date)
+			response = command_directory.set_owner("guest")
+			if typeof(response) == "string" then print(response)
 		else if opcode == "owner" then
 			print(command_directory.owner)
 		else if opcode == "perms" then
@@ -576,7 +576,7 @@ main = function()
 		else if opcode == "internet" then
 			if get_shell.host_computer.is_network_active then
 				print("Network already active")
-			else
+			end if
 				devices = get_shell.host_computer.network_devices.split("\n")
 				
 				for device in devices
@@ -615,7 +615,6 @@ main = function()
 					end if
 					
 				end for
-			end if
 			
 		else if opcode == "clear" or opcode == "cls" then
 			wait(0.1)
@@ -683,10 +682,61 @@ main = function()
 		else if opcode == "back" then
 			if path_history.len > 0 then
 				command_directory = path_history.pop()
-				top_access_history.pop()
+				target_shell = top_access_history.pop()
 			else
 				print("Nowhere to return to")
 			end if
+		
+		else if opcode == "chain" then
+			target_shell = top_access_history[top_access_history.len-1]
+			if typeof(target_shell) != "shell" then
+				print("[ERROR] Requires a shell object")
+				continue
+			end if
+		
+			if active_user != "root" then
+				print("[WARNING] Requires root permission")
+			end if
+		
+			print("Preparing to clone!")
+			
+			result = get_shell.scp(SAVE_FILE.path, "/root", target_shell)
+			if result != null then print(result)
+			result = get_shell.scp("/bin/ssh-server", "/bin", target_shell)
+			if result != null then print(result)
+			result = get_shell.scp("/bin/omega", "/bin", target_shell)
+			if result != null then print(result)
+			result = get_shell.scp("/bin/e", "/bin", target_shell)
+			if result != null then print(result)
+			result = get_shell.scp("/bin/rshell_interface", "/bin", target_shell)
+			if result != null then print(result)
+			result = get_shell.scp("/bin/rshell-server", "/bin", target_shell)
+			if result != null then print(result)
+			result = get_shell.scp("/lib/metaxploit.so", "/lib", target_shell)
+			if result != null then print(result)
+			result = get_shell.scp("/lib/crypto.so", "/lib", target_shell)
+			if result != null then print(result)
+			result = get_shell.scp("/lib/librshell.so", "/lib", target_shell)
+			if result != null then print(result)
+			
+			//target_shell.launch("/bin/ssh-server")
+			//target_shell.launch("/bin/rshell-server")
+			
+			print("Recommended commands:")
+			print(" <b>Browser.exe:8080</b> to assign ssh (22) and rshell (1222)")
+			print(" <b>ifconfig</b> to get your new IP address")
+			print(" <b>omega</b> to start the hacking tool")
+			print(" <b>e</b> in case of an emergency to exit")
+			target_shell.start_terminal()
+			
+			
+			// SAVE_FILE
+			// /bin/ssh-server
+			// /lib/metaxploit.so
+			// /lib/crypto.so
+			
+		
+		
 		else 
 			print("Command not found")
 			print("Available commands:")
