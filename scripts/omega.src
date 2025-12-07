@@ -3,7 +3,7 @@ if active_user != "root" then exit("Please execute as root or with sudo")
 metaxploit = include_lib("/lib/metaxploit.so")
 cryptotools = include_lib("/lib/crypto.so")
 
-ROUTER_HISTORY = [get_router()]
+ROUTER_HISTORY = []//get_router()]
 
 if metaxploit != null then
 	met_lib = metaxploit.load("/lib/metaxploit.so")
@@ -68,11 +68,52 @@ scan_port = function(ip, port, ignoring=[])
 end function
 
 
+check_for_admin = function(ip)
+	ports = get_ports(ip)
 
+	//print(ports)
+	
+	checks = []
+	
+	port_numbers = [0]
+	for port in ports
+		if not port.is_closed then port_numbers.push(port.port_number)
+	end for
+	for port_number in port_numbers
+		//print(port_number)
+		net_session = metaxploit.net_use(ip, port_number)
+		if typeof(net_session) != "NetSession" then continue
+		
+		checks.push([net_session.is_root_active_user, port_number])
+		
+	end for
+	//print(checks)
+
+	default_colour = "green"
+	default = "safe"
+	
+	info = "PORT STATUS"
+	for check in checks
+		if check[0] == true then
+			if check[1] == 0 then
+				default_colour = "red"
+				default = "DANGER"
+				info = info + "\n<b><color=red>0 DANGER</color></b>"
+			else
+				info = info + "\n<b><color=red>" + check[1] + " DANGER</color></b>"
+			end if
+		else
+			info = info + "\n<color="+default_colour+">" + check[1] + " " + default + "</color>"
+		end if
+	end for
+	print(format_columns(info))
+
+end function
 
 
 stab = function(ip, port, memory_address, overflow_index, package="")
 	net_session = metaxploit.net_use(ip, port)
+	if net_session == null then return "Invalid IP/PORT"
 	metalib = net_session.dump_lib()
 	vulns = metaxploit.scan_address(metalib, memory_address)
 	
@@ -175,12 +216,25 @@ nmap = function(ip_addr,router=null)
 	
 	for i in range(0, ports.len-1)
 		port = ports[i]
-		ports[i] = ports[i].port_number + " " + router.port_info(ports[i]) + " "
+		ports[i] = port.port_number + " " + router.port_info(port) + " "
 		if port.is_closed() then 
-			ports[i] = ports[i] + "CLOSED"
+			ports[i] = ports[i] + "CLOSED "
 		else
-			ports[i] = ports[i] + "OPEN"
+			ports[i] = ports[i] + "OPEN "
 		end if
+	
+		ports[i] = ports[i] + port.get_lan_ip() + " "
+		
+		net_session = metaxploit.net_use(ip_addr, port.port_number)
+		if typeof(net_session) != "NetSession" then
+			ports[i] = ports[i] + "UNKOWN"
+		else if net_session.is_root_active_user then
+			ports[i] = ports[i] + "DANGER"
+		else
+			ports[i] = ports[i] + "SAFE"
+		end if
+		
+		
 		
 	end for
 	
@@ -257,6 +311,9 @@ get_attacks_on_addr = function (addr, router=null)
 
 		net_session = metaxploit.net_use(addr, port_number)
 		if typeof(net_session) != "NetSession" then continue
+		
+		if net_session.is_root_active_user then print("<b><color=orange>[WARNING] ADMIN ACTIVE</color></b>")
+		
 		library = net_session.dump_lib
 		lib_name = library.lib_name
 		//print(lib_name)
@@ -466,7 +523,7 @@ main = function()
 	commands = ["exit","stab","scan-addr","collect","omega","target","cd","ls","cat","internet","reboot","nmap","whoami","clear","cls","access_level","get-terminal","back"]
 
 	target = "127.0.0.1"
-	target_port = null
+	target_port = 0
 	path_history = []
 	top_access_history = [get_shell]
 	command_directory = get_shell.host_computer.File(current_path)
@@ -518,10 +575,7 @@ main = function()
 		else if opcode == "scan-addr" then
 			ip = get_command_tac_value(command, "-a")
 			if ip == "" then ip = target
-			router_index = get_command_tac_value(command, "-r").to_int
-			if typeof(router_index) == "string" then router_index = 0
-			if router_index < 0 or router_index > ROUTER_HISTORY.len-1 then router_index = 0
-			get_attacks_on_addr(ip, ROUTER_HISTORY[router_index])
+			get_attacks_on_addr(ip)
 		
 		else if opcode == "routers" then 
 			info = "INDEX IP"
@@ -540,9 +594,9 @@ main = function()
 		else if opcode == "nmap" then
 			ip = get_command_tac_value(command, "-a")
 			if ip == "" then ip = target
-			info = ""
+			info = "PORT LIB VERSION STATUS IP MONITORED"
 			for port in nmap(ip)
-				info = info + port + "\n"
+				info = info + "\n" + port
 			end for
 			print(format_columns(info))
 		else if opcode == "omega" then
@@ -556,6 +610,20 @@ main = function()
 			if typeof(response) == "string" then print(response)
 		else if opcode == "owner" then
 			print(command_directory.owner)
+		else if opcode == "delete" then
+			if user_input("Confirm [y/N] > ") == "y" then 
+				file_to_delete = command_directory
+				command_directory = command_directory.parent
+				if command_directory != null and file_to_delete.has_permission("w") then
+					result = file_to_delete.delete()
+					if result != null then print(result)
+				else
+					print("Permission denied")
+					command_directory = file_to_delete
+				end if
+			end if
+		else if opcode == "size" then
+			print(command_directory.size)
 		else if opcode == "perms" then
 			print(command_directory.permissions)
 		else if opcode == "target" then
@@ -573,6 +641,10 @@ main = function()
 			print(info)
 		else if opcode == "reboot" then
 			if user_input("confirm (Y): ") == "Y" then get_shell.host_computer.reboot
+		else if opcode == "check-admin" then
+			ip = get_command_tac_value(command, "-a")
+			if ip == "" then ip = target
+			check_for_admin(ip)
 		else if opcode == "internet" then
 			if get_shell.host_computer.is_network_active then
 				print("Network already active")
@@ -751,6 +823,7 @@ end function
 
 
 main()
+
 
 
 
