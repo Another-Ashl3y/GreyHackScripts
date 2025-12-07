@@ -1,0 +1,10 @@
+while true
+	procs = get_shell.host_computer.show_procs.split("\n")[1:]
+	info = ""
+	for proc in procs
+		info = info + proc + "\n"
+	end for
+	print(format_columns(info))
+	print(" ")
+	wait(1)
+end while
