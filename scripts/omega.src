@@ -92,7 +92,7 @@ check_for_admin = function(ip)
 	default_colour = "green"
 	default = "safe"
 	
-	info = "PORT STATUS"
+	info = "PORT <b><color=yellow>STATUS</color></b>"
 	for check in checks
 		if check[0] == true then
 			if check[1] == 0 then
