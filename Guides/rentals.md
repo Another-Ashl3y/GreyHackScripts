@@ -1,0 +1,1 @@
+In a rental (not home network), all computers have an ssh access to them. This is used to access the computer. If you set up a switch in the network then to access computers behind the switch you must connect your ethernet to that switch. To do this you have to use `ifconfig etho0 [a new IP on the subnet mask] gateway [IP address of the switch]`
