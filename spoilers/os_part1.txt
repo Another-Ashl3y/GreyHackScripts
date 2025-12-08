@@ -1,0 +1,16 @@
+In 1972, the UNIX operating system was rewritten in the 
+programming language C, opening the possibility for other 
+programmers to create their own operating system variants. 
+
+During the following years different companies bought licenses in 
+order to distribute their own versions of the operating system. 
+Despite the great popularity of Linux after its creation in 1992, 
+and despite it being open source, it was eventually surpassed by a 
+similar operating system with certain peculiarities.
+
+In 1994 the company Neurobox published its closed source operating 
+system called Ellipse along with an SDK. To date, the names of the 
+programmers behind the project have not been made public. Although 
+the system was initially derived from UNIX, the changes to the 
+source were so substantial that it is now considered a system 
+similar to UNIX, rather than a branch of it.
