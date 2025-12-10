@@ -1,0 +1,97 @@
+//command: nmap
+
+
+
+nmap = function(ip, searching=null)
+if not is_valid_ip(ip) then 
+	print("nmap: invalid ip address")
+	return
+end if
+
+if not get_shell.host_computer.is_network_active then exit("nmap: No internet access.")
+
+ipAddress = ip
+if ipAddress == "127.0.0.1" then ipAddress = get_shell.host_computer.local_ip
+isLanIp = is_lan_ip( ipAddress )
+
+if isLanIp then
+   router = get_router;
+else 
+   router = get_router( ipAddress )
+end if
+
+if router == null then 
+	print("nmap: ip address not found")
+	return
+end if
+
+ports = null
+
+if not isLanIp then
+   ports = router.used_ports
+else
+   ports = router.device_ports(ipAddress)
+end if
+
+if ports == null then 
+	print("nmap: ip address not found")
+	return
+end if
+
+if typeof(ports) == "string" then 
+	print(ports)
+	return 
+end if
+
+
+info = "PORT STATE SERVICE VERSION LAN MATCH"
+if(ports.len == 0) then 
+	print("Scan finished. No open ports.")
+	return 
+end if
+
+match_flag = false
+
+for port in ports
+   service_info = router.port_info(port)
+	match = "FALSE"
+	if service_info.split(" ")[0] == searching then 
+		match = "TRUE"
+		match_flag = true
+	end if
+	
+	
+   lan_ips = port.get_lan_ip
+   port_status = "open"
+
+   if(port.is_closed and not isLanIp) then
+      port_status = "closed"
+   end if
+   info = info + "\n" + port.port_number + " " + port_status + " " + service_info + " " + lan_ips + " " + match
+end for 
+
+if match_flag then
+print("\nStarting nmap v1.1 at " + current_date)
+print("Interesting ports on " + ip + "\n")
+print(format_columns(info) + "\n")
+end if
+return match_flag
+end function
+
+save = null
+search_term = null
+if params.len > 0 then search_term = params[0]
+if params.len > 1 then save = get_shell.host_computer.File(params[1])
+if not save then print("[WARNING] Invalid save location")
+
+for o1 in range(1,255)
+	for o2 in range(0,255)
+		for o3 in range(0,255)
+			for o4 in range(0,255)
+				result = nmap(o1 + "." + o2 + "." + o3 + "." + o4, search_term)
+				if result and save then save.set_content(save.get_content + o1 + "." + o2 + "." + o3 + "." + o4 + "\n")
+			end for
+		end for
+	end for
+end for
+

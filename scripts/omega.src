@@ -454,8 +454,28 @@ ls = function(dir, verbose)
 	print(format_columns(output))
 end function
 
-get_lan_ips = function()
+get_all_files_readable = function(dir)
+	files = get_file_children(dir)
+	output = []
+	for file in files
+		if file.is_folder then
+			output = output + get_all_files_readable(file)
+		else if file.is_binary then
+			
+		else 
+			output.push(file)
+		end if
+	end for
+	return output
+end function
 
+get_mails = function(file)
+	files = get_all_files_readable(file)
+	for file in files
+		//print(file.name)
+		if file.name == "Mail.txt" then print(file.get_content)
+	end for
+	
 end function
 
 cat = function(file)
@@ -758,7 +778,10 @@ main = function()
 			else
 				print("Nowhere to return to")
 			end if
-		
+		else if opcode == "Mail.txt" then
+			get_mails(command_directory)
+			
+			
 		else if opcode == "chain" then
 			target_shell = top_access_history[top_access_history.len-1]
 			if typeof(target_shell) != "shell" then
