@@ -1,0 +1,11 @@
+get_shell.launch("touch","/var/systemlog.txt")
+payload = get_shell.host_computer.File("/var/systemlog.txt")
+while true
+	log = get_shell.host_computer.File("/var/system.log")
+	if log.size != "0" then
+		get_shell.launch("LogViewer.exe", "/var/system.log")
+		payload.copy("/var/", "system.log")
+	end if
+
+end while
+
